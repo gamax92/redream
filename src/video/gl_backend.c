@@ -432,35 +432,35 @@ static void rb_create_shaders(struct render_backend *rb) {
     header[0] = 0;
 
     if ((i & ATTR_SHADE_MASK) == ATTR_SHADE_DECAL) {
-      strcat(header, "#define SHADE_DECAL 1\n");
+      strcat(header, "#define SHADE_DECAL\n");
     }
 
     if ((i & ATTR_SHADE_MASK) == ATTR_SHADE_MODULATE) {
-      strcat(header, "#define SHADE_MODULATE 1\n");
+      strcat(header, "#define SHADE_MODULATE\n");
     }
 
     if ((i & ATTR_SHADE_MASK) == ATTR_SHADE_DECAL_ALPHA) {
-      strcat(header, "#define SHADE_DECAL_ALPHA 1\n");
+      strcat(header, "#define SHADE_DECAL_ALPHA\n");
     }
 
     if ((i & ATTR_SHADE_MASK) == ATTR_SHADE_MODULATE_ALPHA) {
-      strcat(header, "#define SHADE_MODULATE_ALPHA 1\n");
+      strcat(header, "#define SHADE_MODULATE_ALPHA\n");
     }
 
     if (i & ATTR_TEXTURE) {
-      strcat(header, "#define TEXTURE 1\n");
+      strcat(header, "#define TEXTURE\n");
     }
 
     if (i & ATTR_IGNORE_ALPHA) {
-      strcat(header, "#define IGNORE_ALPHA 1\n");
+      strcat(header, "#define IGNORE_ALPHA\n");
     }
 
     if (i & ATTR_IGNORE_TEXTURE_ALPHA) {
-      strcat(header, "#define USE_IGNORE_TEXTURE_ALPHA 1\n");
+      strcat(header, "#define IGNORE_TEXTURE_ALPHA\n");
     }
 
     if (i & ATTR_OFFSET_COLOR) {
-      strcat(header, "#define OFFSET_COLOR 1\n");
+      strcat(header, "#define OFFSET_COLOR\n");
     }
 
     if (!rb_compile_program(rb, program, header, ta_vp, ta_fp)) {
