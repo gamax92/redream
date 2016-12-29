@@ -230,11 +230,19 @@ static const Xbyak::Xmm x64_backend_xmm_register(struct x64_backend *backend,
     if (v->type == VALUE_F32) {
       float val = v->f32;
       e.mov(e.eax, *(int32_t *)&val);
+#if USE_AVX
       e.vmovd(e.xmm1, e.eax);
+#else
+      e.movd(e.xmm1, e.eax);
+#endif
     } else {
       double val = v->f64;
       e.mov(e.rax, *(int64_t *)&val);
+#if USE_AVX
       e.vmovq(e.xmm1, e.rax);
+#else
+      e.movq(e.xmm1, e.rax);
+#endif
     }
     return e.xmm1;
   }
@@ -383,18 +391,22 @@ static void x64_backend_emit_thunks(struct x64_backend *backend) {
 static void x64_backend_emit_constants(struct x64_backend *backend) {
   auto &e = *backend->codegen;
 
+  e.align(16);
   e.L(backend->xmm_const[XMM_CONST_ABS_MASK_PS]);
   e.dq(INT64_C(0x7fffffff7fffffff));
   e.dq(INT64_C(0x7fffffff7fffffff));
 
+  e.align(16);
   e.L(backend->xmm_const[XMM_CONST_ABS_MASK_PD]);
   e.dq(INT64_C(0x7fffffffffffffff));
   e.dq(INT64_C(0x7fffffffffffffff));
 
+  e.align(16);
   e.L(backend->xmm_const[XMM_CONST_SIGN_MASK_PS]);
   e.dq(INT64_C(0x8000000080000000));
   e.dq(INT64_C(0x8000000080000000));
 
+  e.align(16);
   e.L(backend->xmm_const[XMM_CONST_SIGN_MASK_PD]);
   e.dq(INT64_C(0x8000000000000000));
   e.dq(INT64_C(0x8000000000000000));
@@ -543,10 +555,18 @@ EMITTER(LOAD) {
 
     switch (instr->result->type) {
       case VALUE_F32:
+#if USE_AVX
         e.vmovss(result, e.dword[a]);
+#else
+        e.movss(result, e.dword[a]);
+#endif
         break;
       case VALUE_F64:
+#if USE_AVX
         e.vmovsd(result, e.qword[a]);
+#else
+        e.movsd(result, e.qword[a]);
+#endif
         break;
       default:
         LOG_FATAL("Unexpected result type");
@@ -583,10 +603,18 @@ EMITTER(STORE) {
 
     switch (instr->arg[1]->type) {
       case VALUE_F32:
+#if USE_AVX
         e.vmovss(e.dword[a], b);
+#else
+        e.movss(e.dword[a], b);
+#endif
         break;
       case VALUE_F64:
+#if USE_AVX
         e.vmovsd(e.qword[a], b);
+#else
+        e.movsd(e.qword[a], b);
+#endif
         break;
       default:
         LOG_FATAL("Unexpected value type");
@@ -729,7 +757,11 @@ EMITTER(LOAD_CONTEXT) {
 
     switch (instr->result->type) {
       case VALUE_V128:
+#if USE_AVX
+        e.vmovups(result, e.ptr[e.r14 + offset]);
+#else
         e.movups(result, e.ptr[e.r14 + offset]);
+#endif
         break;
       default:
         LOG_FATAL("Unexpected result type");
@@ -740,10 +772,18 @@ EMITTER(LOAD_CONTEXT) {
 
     switch (instr->result->type) {
       case VALUE_F32:
+#if USE_AVX
         e.vmovss(result, e.dword[e.r14 + offset]);
+#else
+        e.movss(result, e.dword[e.r14 + offset]);
+#endif
         break;
       case VALUE_F64:
+#if USE_AVX
         e.vmovsd(result, e.qword[e.r14 + offset]);
+#else
+        e.movsd(result, e.qword[e.r14 + offset]);
+#endif
         break;
       default:
         LOG_FATAL("Unexpected result type");
@@ -801,7 +841,11 @@ EMITTER(STORE_CONTEXT) {
 
       switch (instr->arg[1]->type) {
         case VALUE_V128:
+#if USE_AVX
           e.vmovups(e.ptr[e.r14 + offset], src);
+#else
+          e.movups(e.ptr[e.r14 + offset], src);
+#endif
           break;
         default:
           LOG_FATAL("Unexpected result type");
@@ -812,10 +856,18 @@ EMITTER(STORE_CONTEXT) {
 
       switch (instr->arg[1]->type) {
         case VALUE_F32:
+#if USE_AVX
           e.vmovss(e.dword[e.r14 + offset], src);
+#else
+          e.movss(e.dword[e.r14 + offset], src);
+#endif
           break;
         case VALUE_F64:
+#if USE_AVX
           e.vmovsd(e.qword[e.r14 + offset], src);
+#else
+          e.movsd(e.qword[e.r14 + offset], src);
+#endif
           break;
         default:
           LOG_FATAL("Unexpected value type");
@@ -853,7 +905,11 @@ EMITTER(LOAD_LOCAL) {
 
     switch (instr->result->type) {
       case VALUE_V128:
+#if USE_AVX
+        e.vmovups(result, e.ptr[e.rsp + offset]);
+#else
         e.movups(result, e.ptr[e.rsp + offset]);
+#endif
         break;
       default:
         LOG_FATAL("Unexpected result type");
@@ -864,10 +920,18 @@ EMITTER(LOAD_LOCAL) {
 
     switch (instr->result->type) {
       case VALUE_F32:
+#if USE_AVX
         e.vmovss(result, e.dword[e.rsp + offset]);
+#else
+        e.movss(result, e.dword[e.rsp + offset]);
+#endif
         break;
       case VALUE_F64:
+#if USE_AVX
         e.vmovsd(result, e.qword[e.rsp + offset]);
+#else
+        e.movsd(result, e.qword[e.rsp + offset]);
+#endif
         break;
       default:
         LOG_FATAL("Unexpected result type");
@@ -906,7 +970,11 @@ EMITTER(STORE_LOCAL) {
 
     switch (instr->arg[1]->type) {
       case VALUE_V128:
+#if USE_AVX
         e.vmovups(e.ptr[e.rsp + offset], src);
+#else
+        e.movups(e.ptr[e.rsp + offset], src);
+#endif
         break;
       default:
         LOG_FATAL("Unexpected result type");
@@ -917,10 +985,18 @@ EMITTER(STORE_LOCAL) {
 
     switch (instr->arg[1]->type) {
       case VALUE_F32:
+#if USE_AVX
         e.vmovss(e.dword[e.rsp + offset], src);
+#else
+        e.movss(e.dword[e.rsp + offset], src);
+#endif
         break;
       case VALUE_F64:
+#if USE_AVX
         e.vmovsd(e.qword[e.rsp + offset], src);
+#else
+        e.movsd(e.qword[e.rsp + offset], src);
+#endif
         break;
       default:
         LOG_FATAL("Unexpected value type");
@@ -1270,9 +1346,23 @@ EMITTER(FADD) {
   const Xbyak::Xmm b = x64_backend_xmm_register(backend, instr->arg[1]);
 
   if (instr->result->type == VALUE_F32) {
+#if USE_AVX
     e.vaddss(result, a, b);
+#else
+    if (result != a) {
+      e.movss(result, a);
+    }
+    e.addss(result, b);
+#endif
   } else {
+#if USE_AVX
     e.vaddsd(result, a, b);
+#else
+    if (result != a) {
+      e.movsd(result, a);
+    }
+    e.addsd(result, b);
+#endif
   }
 }
 
@@ -1282,9 +1372,23 @@ EMITTER(FSUB) {
   const Xbyak::Xmm b = x64_backend_xmm_register(backend, instr->arg[1]);
 
   if (instr->result->type == VALUE_F32) {
+#if USE_AVX
     e.vsubss(result, a, b);
+#else
+    if (result != a) {
+      e.movss(result, a);
+    }
+    e.subss(result, b);
+#endif
   } else {
+#if USE_AVX
     e.vsubsd(result, a, b);
+#else
+    if (result != a) {
+      e.movsd(result, a);
+    }
+    e.subsd(result, b);
+#endif
   }
 }
 
@@ -1294,9 +1398,23 @@ EMITTER(FMUL) {
   const Xbyak::Xmm b = x64_backend_xmm_register(backend, instr->arg[1]);
 
   if (instr->result->type == VALUE_F32) {
+#if USE_AVX
     e.vmulss(result, a, b);
+#else
+    if (result != a) {
+      e.movss(result, a);
+    }
+    e.mulss(result, b);
+#endif
   } else {
+#if USE_AVX
     e.vmulsd(result, a, b);
+#else
+    if (result != a) {
+      e.movsd(result, a);
+    }
+    e.mulsd(result, b);
+#endif
   }
 }
 
@@ -1306,9 +1424,23 @@ EMITTER(FDIV) {
   const Xbyak::Xmm b = x64_backend_xmm_register(backend, instr->arg[1]);
 
   if (instr->result->type == VALUE_F32) {
+#if USE_AVX
     e.vdivss(result, a, b);
+#else
+    if (result != a) {
+      e.movss(result, a);
+    }
+    e.divss(result, b);
+#endif
   } else {
+#if USE_AVX
     e.vdivsd(result, a, b);
+#else
+    if (result != a) {
+      e.movsd(result, a);
+    }
+    e.divsd(result, b);
+#endif
   }
 }
 
@@ -1317,11 +1449,25 @@ EMITTER(FNEG) {
   const Xbyak::Xmm a = x64_backend_xmm_register(backend, instr->arg[0]);
 
   if (instr->result->type == VALUE_F32) {
+#if USE_AVX
     e.vxorps(result, a,
              x64_backend_xmm_constant(backend, XMM_CONST_SIGN_MASK_PS));
+#else
+    if (result != a) {
+      e.movss(result, a);
+    }
+    e.xorps(result, x64_backend_xmm_constant(backend, XMM_CONST_SIGN_MASK_PS));
+#endif
   } else {
+#if USE_AVX
     e.vxorpd(result, a,
              x64_backend_xmm_constant(backend, XMM_CONST_SIGN_MASK_PD));
+#else
+    if (result != a) {
+      e.movsd(result, a);
+    }
+    e.xorpd(result, x64_backend_xmm_constant(backend, XMM_CONST_SIGN_MASK_PD));
+#endif
   }
 }
 
@@ -1330,11 +1476,25 @@ EMITTER(FABS) {
   const Xbyak::Xmm a = x64_backend_xmm_register(backend, instr->arg[0]);
 
   if (instr->result->type == VALUE_F32) {
+#if USE_AVX
     e.vandps(result, a,
              x64_backend_xmm_constant(backend, XMM_CONST_ABS_MASK_PS));
+#else
+    if (result != a) {
+      e.movss(result, a);
+    }
+    e.andps(result, x64_backend_xmm_constant(backend, XMM_CONST_ABS_MASK_PS));
+#endif
   } else {
+#if USE_AVX
     e.vandpd(result, a,
              x64_backend_xmm_constant(backend, XMM_CONST_ABS_MASK_PD));
+#else
+    if (result != a) {
+      e.movsd(result, a);
+    }
+    e.andpd(result, x64_backend_xmm_constant(backend, XMM_CONST_ABS_MASK_PD));
+#endif
   }
 }
 
@@ -1343,9 +1503,17 @@ EMITTER(SQRT) {
   const Xbyak::Xmm a = x64_backend_xmm_register(backend, instr->arg[0]);
 
   if (instr->result->type == VALUE_F32) {
+#if USE_AVX
     e.vsqrtss(result, a);
+#else
+    e.sqrtss(result, a);
+#endif
   } else {
+#if USE_AVX
     e.vsqrtsd(result, a);
+#else
+    e.sqrtsd(result, a);
+#endif
   }
 }
 
@@ -1353,7 +1521,12 @@ EMITTER(VBROADCAST) {
   const Xbyak::Xmm result = x64_backend_xmm_register(backend, instr->result);
   const Xbyak::Xmm a = x64_backend_xmm_register(backend, instr->arg[0]);
 
+#if USE_AVX
   e.vbroadcastss(result, a);
+#else
+  e.movss(result, a);
+  e.shufps(result, result, 0);
+#endif
 }
 
 EMITTER(VADD) {
@@ -1361,7 +1534,14 @@ EMITTER(VADD) {
   const Xbyak::Xmm a = x64_backend_xmm_register(backend, instr->arg[0]);
   const Xbyak::Xmm b = x64_backend_xmm_register(backend, instr->arg[1]);
 
+#if USE_AVX
   e.vaddps(result, a, b);
+#else
+  if (result != a) {
+    e.movaps(result, a);
+  }
+  e.addps(result, b);
+#endif
 }
 
 EMITTER(VDOT) {
@@ -1369,7 +1549,16 @@ EMITTER(VDOT) {
   const Xbyak::Xmm a = x64_backend_xmm_register(backend, instr->arg[0]);
   const Xbyak::Xmm b = x64_backend_xmm_register(backend, instr->arg[1]);
 
+#if USE_AVX
   e.vdpps(result, a, b, 0b11110001);
+#else
+  if (result != a) {
+    e.movaps(result, a);
+  }
+  e.mulps(result, b);
+  e.haddps(result, result);
+  e.haddps(result, result);
+#endif
 }
 
 EMITTER(VMUL) {
@@ -1377,7 +1566,14 @@ EMITTER(VMUL) {
   const Xbyak::Xmm a = x64_backend_xmm_register(backend, instr->arg[0]);
   const Xbyak::Xmm b = x64_backend_xmm_register(backend, instr->arg[1]);
 
+#if USE_AVX
   e.vmulps(result, a, b);
+#else
+  if (result != a) {
+    e.movaps(result, a);
+  }
+  e.mulps(result, b);
+#endif
 }
 
 EMITTER(AND) {
@@ -1654,14 +1850,6 @@ void x64_backend_destroy(struct x64_backend *backend) {
 
 struct x64_backend *x64_backend_create(struct jit *jit, void *code,
                                        int code_size, int stack_size) {
-  /* AVX is used instead of SSE purely because its 3 argument instructions
-     are easier to emit for */
-  Xbyak::util::Cpu cpu;
-  if (!cpu.has(Xbyak::util::Cpu::tAVX)) {
-    LOG_WARNING("Failed to create x64 backend, CPU does not support AVX");
-    return NULL;
-  }
-
   struct x64_backend *backend = reinterpret_cast<struct x64_backend *>(
       calloc(1, sizeof(struct x64_backend)));
 
