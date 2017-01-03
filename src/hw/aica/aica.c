@@ -48,6 +48,15 @@ struct aica_channel {
 
   /* current position in the sound source */
   uint32_t offset;
+
+  /* adpcm step state */
+  int64_t adpcm_step;
+
+  /* adpcm last sample predictor state */
+  int32_t adpcm_predictor;
+
+  /* adpcm last decoded position state */
+  uint32_t adpcm_pos;
 };
 
 struct aica {
@@ -75,6 +84,32 @@ struct aica {
   /* raw audio recording */
   FILE *recording;
 };
+
+static const int16_t adpcm_yamaha_indexscale[] = {
+  230, 230, 230, 230, 307, 409, 512, 614,
+  230, 230, 230, 230, 307, 409, 512, 614
+};
+
+static const int8_t adpcm_yamaha_difflookup[] = {
+   1,  3,  5,  7,  9,  11,  13,  15,
+  -1, -3, -5, -7, -9, -11, -13, -15
+};
+
+static int16_t aica_decode_adpcm_nibble(struct aica_channel *ch, uint8_t nibble) {
+  ch->adpcm_predictor += (ch->adpcm_step * adpcm_yamaha_difflookup[nibble]) / 8;
+  if (ch->adpcm_predictor < -0x8000) {
+    ch->adpcm_predictor = -0x8000;
+  } else if (ch->adpcm_predictor > 0x7fff) {
+    ch->adpcm_predictor = 0x7fff;
+  }
+  ch->adpcm_step = (ch->adpcm_step * adpcm_yamaha_indexscale[nibble]) >> 8;
+  if (ch->adpcm_step < 0x7f) {
+    ch->adpcm_step = 0x7f;
+  } else if (ch->adpcm_step > 0x6000) {
+    ch->adpcm_step = 0x6000;
+  }
+  return ch->adpcm_predictor;
+}
 
 static void aica_raise_interrupt(struct aica *aica, int intr) {
   aica->common_data->MCIPD |= (1 << intr);
@@ -291,6 +326,9 @@ static void aica_channel_start(struct aica *aica, struct aica_channel *ch) {
   ch->base = &aica->wave_ram[start_addr];
   ch->step = aica_channel_step(ch);
   ch->offset = 0;
+  ch->adpcm_predictor = 0;
+  ch->adpcm_step = 127;
+  ch->adpcm_pos = -1;
 
   LOG_AICA("aica_channel_start %d", ch - aica->channels);
 }
@@ -340,13 +378,30 @@ static int32_t aica_channel_update(struct aica *aica, struct aica_channel *ch) {
     case 1: {
       int8_t *samples = (int8_t *)ch->base;
       prev = samples[pos] << 8;
-      next = samples[pos] << 8;
+      next = samples[pos + 1] << 8;
+    } break;
+
+    case 2:
+    case 3: {
+      uint8_t *samples = (uint8_t *)ch->base;
+      for (uint32_t spos = ch->adpcm_pos+1; spos <= pos; spos++) {
+        uint8_t nibble = samples[spos >> 1];
+        nibble >>= (spos & 1) * 4;
+        prev = aica_decode_adpcm_nibble(ch, nibble & 0xF);
+      }
+      if (pos == ch->adpcm_pos) {
+        prev = ch->adpcm_predictor;
+      }
+      next = prev;
+
     } break;
 
     default:
-      /* LOG_WARNING("Unsupported PCMS %d", ch->data->PCMS); */
+      LOG_WARNING("Unsupported PCMS %d", ch->data->PCMS);
       break;
   }
+
+  ch->adpcm_pos = pos;
 
   /* interpolate sample */
   int32_t sample = (prev * ((1 << AICA_FNS_BITS) - frac)) + (next * frac);
@@ -363,6 +418,8 @@ static int32_t aica_channel_update(struct aica *aica, struct aica_channel *ch) {
       LOG_AICA("aica_channel_step %d restart", ch - aica->channels);
       ch->offset = ch->data->LSA << AICA_FNS_BITS;
       ch->looped = 1;
+      ch->adpcm_predictor = 0;
+      ch->adpcm_step = 127;
     } else {
       aica_channel_stop(aica, ch);
     }
